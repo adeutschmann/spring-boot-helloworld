@@ -157,6 +157,12 @@ jobs:
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
 
+    - name: Download JAR artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: spring-boot-helloworld-jar-${{ github.sha }}
+        path: target/
+
     - name: Configure Maven settings for Nexus
       run: |
         mkdir -p ~/.m2
