@@ -187,7 +187,30 @@ jobs:
     - name: Extract current version
       id: version
       run: |
-        CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
+        # Make Maven wrapper executable
+        chmod +x ./mvnw
+        
+        # Try multiple methods to extract version
+        echo "Attempting to extract version from pom.xml..."
+        
+        # Method 1: Try Maven wrapper
+        if CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout 2>/dev/null); then
+          echo "✅ Version extracted using Maven wrapper: $CURRENT_VERSION"
+        else
+          echo "⚠️ Maven wrapper failed, trying alternative methods..."
+        
+          # Method 2: Parse pom.xml directly
+          CURRENT_VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
+          echo "✅ Version extracted from pom.xml: $CURRENT_VERSION"
+        fi
+        
+        # Validate version format
+        if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT)?$ ]]; then
+          echo "❌ Invalid version format: $CURRENT_VERSION"
+          echo "Setting default version: 0.0.1-SNAPSHOT"
+          CURRENT_VERSION="0.0.1-SNAPSHOT"
+        fi
+        
         echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
         # Remove -SNAPSHOT suffix and extract version parts
