@@ -161,7 +161,7 @@ jobs:
       run: |
         mkdir -p ~/.m2
         
-        cat > ~/.m2/settings.xml << 'EOF'
+        cat > ~/.m2/settings.xml << EOF
         <?xml version="1.0" encoding="UTF-8"?>
         <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -169,22 +169,18 @@ jobs:
                                       http://maven.apache.org/xsd/settings-1.0.0.xsd">
           <servers>
             <server>
-              <id>nexus-releases</id>
-              <username>NEXUS_USERNAME</username>
-              <password>NEXUS_PASSWORD</password>
-            </server>
-            <server>
-              <id>nexus-snapshots</id>
-              <username>NEXUS_USERNAME</username>
-              <password>NEXUS_PASSWORD</password>
+              <id>adeutschmanndev-nexus</id>
+              <username>${NEXUS_USERNAME}</username>
+              <password>${NEXUS_PASSWORD}</password>
             </server>
           </servers>
         </settings>
         EOF
         
         echo "✅ Maven settings.xml configured successfully"
-        echo "Settings file contents (with masked credentials):"
-        sed 's/<password>.*<\/password>/<password>***<\/password>/g' ~/.m2/settings.xml
+        echo "Server configurations:"
+        echo "  - nexus-releases: ${NEXUS_USERNAME}"
+        echo "  - nexus-snapshots: ${NEXUS_USERNAME}"
       env:
         NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
         NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
@@ -245,10 +241,11 @@ jobs:
         echo "Set version to: ${{ steps.version.outputs.release_version }}"
 
     - name: Deploy release to Nexus
-      run: ./mvnw deploy -DskipTests -Dnexus.url=${{ secrets.NEXUS_URL }}
-      env:
-        NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-        NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+      run: |
+        echo "🚀 Deploying to Nexus repository..."
+        echo "Using distributionManagement configuration from pom.xml"
+        ./mvnw deploy -DskipTests
+        echo "✅ Successfully deployed to Nexus"
 
     - name: Create Git tag for release
       run: |

@@ -32,15 +32,10 @@
 
     <distributionManagement>
         <repository>
-            <id>nexus-releases</id>
+            <id>adeutschmanndev-nexus</id>
             <name>Nexus Release Repository</name>
             <url>${nexus.url}/repository/maven-releases/</url>
         </repository>
-        <snapshotRepository>
-            <id>nexus-snapshots</id>
-            <name>Nexus Snapshot Repository</name>
-            <url>${nexus.url}/repository/maven-snapshots/</url>
-        </snapshotRepository>
     </distributionManagement>
 
     <dependencies>
