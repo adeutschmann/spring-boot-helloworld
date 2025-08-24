@@ -14,8 +14,8 @@ permissions:
 env:
   JAVA_VERSION: '21'
   MAVEN_OPTS: '-Xmx1024m'
-  REGISTRY: ghcr.io
-  IMAGE_NAME: adeutschmann/spring-boot-helloworld
+  REGISTRY: ${{ secrets.NEXUS_DOCKER_REGISTRY }}
+  IMAGE_NAME: spring-boot-helloworld
 
 jobs:
   build:
@@ -120,10 +120,14 @@ jobs:
           echo "Tagged images:"
           podman images | grep $IMAGE_NAME
 
-      - name: Login to Container Registry
+      - name: Login to Nexus Docker Registry
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+          echo "🔐 Logging into Nexus Docker registry..."
+          echo "${{ secrets.NEXUS_PASSWORD }}" | podman login \
+            --username "${{ secrets.NEXUS_USERNAME }}" \
+            --password-stdin \
+            ${{ env.REGISTRY }}
 
       - name: Push container images
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
