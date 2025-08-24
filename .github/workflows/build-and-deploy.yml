@@ -64,13 +64,18 @@ jobs:
   build-container:
     runs-on: ubuntu-latest
     needs: build
+    # Only build containers on merge to main/master (not on PRs)
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
-      image-version: ${{ steps.version.outputs.version }}
+      image-version: ${{ steps.version.outputs.release_version }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
@@ -78,31 +83,87 @@ jobs:
           name: spring-boot-helloworld-jar-${{ github.sha }}
           path: target/
 
-      - name: Extract version
+      - name: Extract and prepare version (same logic as deploy job)
         id: version
         run: |
-          # Extract project version specifically (not parent version)
-          VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout 2>/dev/null || \
-                   grep -A 10 '<artifactId>helloworld</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
-          echo "Extracted project version: $VERSION"
+          # Make Maven wrapper executable
+          chmod +x ./mvnw
           
-          # For container tags, we can keep the full version including SNAPSHOT
-          # or remove it depending on your preference
-          CLEAN_VERSION="$VERSION"
-          echo "version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-          echo "Container version: $CLEAN_VERSION"
+          # Extract current version using same logic as deploy job
+          echo "Attempting to extract project information from pom.xml..."
+          
+          if CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout 2>/dev/null) && \
+             GROUP_ID=$(./mvnw help:evaluate -Dexpression=project.groupId -q -DforceStdout 2>/dev/null) && \
+             ARTIFACT_ID=$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout 2>/dev/null); then
+            echo "✅ Project info extracted using Maven wrapper:"
+            echo "  GroupId: $GROUP_ID"
+            echo "  ArtifactId: $ARTIFACT_ID" 
+            echo "  Version: $CURRENT_VERSION"
+          else
+            echo "⚠️ Maven wrapper failed, trying alternative methods..."
+          
+            # Method 2: Parse pom.xml directly - extract project version specifically
+            CURRENT_VERSION=$(grep -A 10 '<artifactId>helloworld</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
+            GROUP_ID=$(grep -A 5 '<artifactId>helloworld</artifactId>' pom.xml | grep -B 5 '<version>' | grep '<groupId>' | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
+            ARTIFACT_ID=$(grep '<artifactId>helloworld</artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
+            echo "✅ Project info extracted from pom.xml:"
+            echo "  GroupId: $GROUP_ID"
+            echo "  ArtifactId: $ARTIFACT_ID"
+            echo "  Version: $CURRENT_VERSION"
+          fi
+          
+          # Validate version format
+          if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT)?$ ]]; then
+            echo "❌ Invalid version format: $CURRENT_VERSION"
+            echo "Setting default version: 0.0.1-SNAPSHOT"
+            CURRENT_VERSION="0.0.1-SNAPSHOT"
+          fi
+          
+          # Remove -SNAPSHOT suffix and extract version parts
+          BASE_VERSION=$(echo $CURRENT_VERSION | sed 's/-SNAPSHOT//')
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+
+          # Extract major, minor, patch
+          MAJOR=$(echo $BASE_VERSION | cut -d. -f1)
+          MINOR=$(echo $BASE_VERSION | cut -d. -f2)
+          PATCH=$(echo $BASE_VERSION | cut -d. -f3)
+
+          # Increment patch version for release
+          NEW_PATCH=$((PATCH + 1))
+          RELEASE_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+
+          echo "📋 Container Version Summary:"
+          echo "  Current version: $CURRENT_VERSION"
+          echo "  Release version (for container): $RELEASE_VERSION"
 
       - name: Set up Podman
         run: |
           sudo apt-get update
           sudo apt-get install -y podman
 
+      - name: Update JAR to use release version for container build
+        run: |
+          # Rename the JAR file to use the release version (without SNAPSHOT)
+          OLD_JAR=$(find target -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -1)
+          if [[ -f "$OLD_JAR" ]]; then
+            NEW_JAR="target/helloworld-${{ steps.version.outputs.release_version }}.jar"
+            echo "Renaming JAR: $OLD_JAR -> $NEW_JAR"
+            mv "$OLD_JAR" "$NEW_JAR"
+            echo "✅ JAR renamed to match release version"
+          else
+            echo "❌ Original JAR not found"
+            exit 1
+          fi
+
       - name: Build container image
         id: build
         run: |
-          echo "🏗️ Building container image..."
+          echo "🏗️ Building container image with release version ${{ steps.version.outputs.release_version }}..."
           
-          # Build with podman
+          # Build with podman using release version
           podman build -t local-build .
           
           echo "Container image built successfully"
@@ -115,7 +176,7 @@ jobs:
           echo "🏷️ Tagging images for release..."
           echo "Registry: $REGISTRY"
           echo "Image name: $IMAGE_NAME"
-          echo "Version: ${{ steps.version.outputs.version }}"
+          echo "Release Version: ${{ steps.version.outputs.release_version }}"
           
           # Clean and validate registry URL
           if [ -n "$REGISTRY" ] && [ "$REGISTRY" != "" ]; then
@@ -126,7 +187,8 @@ jobs:
             # Validate registry format
             if [[ "$CLEAN_REGISTRY" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]] || [[ "$CLEAN_REGISTRY" =~ ^[a-zA-Z0-9.-]+$ ]]; then
               echo "Tagging with registry: $CLEAN_REGISTRY"
-              podman tag local-build $CLEAN_REGISTRY/$IMAGE_NAME:${{ steps.version.outputs.version }}
+              # Use release version (no SNAPSHOT) for container tags
+              podman tag local-build $CLEAN_REGISTRY/$IMAGE_NAME:${{ steps.version.outputs.release_version }}
               podman tag local-build $CLEAN_REGISTRY/$IMAGE_NAME:latest
             else
               echo "❌ Invalid registry format: $CLEAN_REGISTRY"
@@ -135,7 +197,8 @@ jobs:
             fi
           else
             echo "No registry configured, using local tags"
-            podman tag local-build $IMAGE_NAME:${{ steps.version.outputs.version }}
+            # Use release version (no SNAPSHOT) for container tags
+            podman tag local-build $IMAGE_NAME:${{ steps.version.outputs.release_version }}
             podman tag local-build $IMAGE_NAME:latest
           fi
           
@@ -165,12 +228,13 @@ jobs:
             # Clean registry URL for pushing
             CLEAN_REGISTRY=$(echo "${{ env.REGISTRY }}" | sed 's|^https\?://||' | sed 's|/$||')
             echo "Push registry: $CLEAN_REGISTRY"
-            
-            podman push $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          
+            # Push with release version (no SNAPSHOT)
+            podman push $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.release_version }}
             podman push $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:latest
           
             echo "✅ Images pushed successfully:"
-            echo "  - $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+            echo "  - $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.release_version }}"
             echo "  - $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:latest"
           else
             echo "⚠️ No registry configured, skipping push"
