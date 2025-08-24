@@ -10,6 +10,8 @@ on:
 env:
   JAVA_VERSION: '21'
   MAVEN_OPTS: '-Xmx1024m'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: spring-boot-helloworld
 
 jobs:
   build:
@@ -44,6 +46,86 @@ jobs:
         name: spring-boot-helloworld-jar-${{ github.sha }}
         path: target/*.jar
         retention-days: 30
+
+  build-container:
+    runs-on: ubuntu-latest
+    needs: build
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spring-boot-helloworld-jar-${{ github.sha }}
+          path: target/
+
+      - name: Extract version
+        id: version
+        run: |
+          # Extract version from pom.xml
+          VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          # Remove -SNAPSHOT for container tags
+          CLEAN_VERSION=$(echo $VERSION | sed 's/-SNAPSHOT//')
+          echo "version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $CLEAN_VERSION"
+
+      - name: Set up Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: Build container image
+        id: build
+        run: |
+          echo "🏗️ Building container image..."
+          
+          # Build with podman
+          podman build -t local-build .
+          
+          echo "Container image built successfully"
+
+      - name: Tag images for release
+        run: |
+          echo "🏷️ Tagging images for release..."
+          
+          # Tag with version (only if REGISTRY is set)
+          if [ -n "${{ env.REGISTRY }}" ]; then
+            podman tag local-build ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            podman tag local-build ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          else
+            # If no registry, use local tags
+            podman tag local-build ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            podman tag local-build ${{ env.IMAGE_NAME }}:latest
+          fi
+          
+          echo "Tagged images:"
+          podman images | grep ${{ env.IMAGE_NAME }}
+
+      - name: Login to Container Registry
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+      - name: Push container images
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: |
+          echo "🚀 Pushing container images..."
+          
+          if [ -n "${{ env.REGISTRY }}" ]; then
+            podman push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            podman push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          
+            echo "✅ Images pushed successfully:"
+            echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+            echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          else
+            echo "⚠️ No registry configured, skipping push"
+          fi
 
   deploy-to-nexus:
     runs-on: ubuntu-latest
