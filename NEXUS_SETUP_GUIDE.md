@@ -1,12 +1,29 @@
 # GitHub Actions Nexus Deployment Setup Guide
 
-This guide walks you through setting up GitHub Actions to build your Spring Boot JAR and deploy it to your Nexus repository.
+This guide walks you through setting up GitHub Actions to build your Spring Boot JAR and deploy it to your Nexus repository **only when merging to main/master branch**.
 
 ## 📋 Prerequisites
 
 - Access to your GitHub repository settings
 - Nexus repository manager with user credentials
 - Your Nexus instance URL
+
+## 🔄 Workflow Behavior
+
+### When the workflow runs:
+- **Build Job**: Always runs on:
+  - Push to main/master branches
+  - Pull requests to main/master branches
+  - Manual workflow dispatch
+
+- **Deploy to Nexus Job**: Only runs on:
+  - **Push to main/master branches** (merge from feature branch)
+  - **NOT on pull requests** (ensures only reviewed code gets deployed)
+
+### What happens:
+1. **Feature branch work**: Build and test only (no Nexus deployment)
+2. **Pull request**: Build and test only (validates the code)
+3. **Merge to main/master**: Build, test, AND deploy to Nexus
 
 ## 🔐 Step 1: Set up GitHub Secrets
 

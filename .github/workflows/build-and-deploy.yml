@@ -2,7 +2,7 @@ name: Build and Deploy to Nexus
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
@@ -12,8 +12,44 @@ env:
   MAVEN_OPTS: '-Xmx1024m'
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+
+    - name: Run tests
+      run: ./mvnw test
+
+    - name: Build JAR
+      run: ./mvnw clean package -DskipTests
+
+    - name: Upload JAR artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: spring-boot-helloworld-jar-${{ github.sha }}
+        path: target/*.jar
+        retention-days: 30
+
+  deploy-to-nexus:
+    runs-on: ubuntu-latest
+    needs: build
+    # Only deploy to Nexus on merge to main/master (not on PRs)
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
 
     steps:
     - name: Checkout code
@@ -59,19 +95,6 @@ jobs:
         NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
         NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
 
-    - name: Run tests
-      run: ./mvnw test
-
-    - name: Build JAR
-      run: ./mvnw clean package -DskipTests
-
-    - name: Upload JAR artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: spring-boot-helloworld-jar
-        path: target/*.jar
-        retention-days: 30
-
     - name: Deploy to Nexus
       run: ./mvnw deploy -DskipTests -Dnexus.url=${{ secrets.NEXUS_URL }}
       env:
@@ -82,6 +105,8 @@ jobs:
       if: always()
       run: |
         echo "## Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Java Version**: ${{ env.JAVA_VERSION }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Maven Build**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Success'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
         echo "- **Nexus Deploy**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Deployed'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
