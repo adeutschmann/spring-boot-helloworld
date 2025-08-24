@@ -1,0 +1,88 @@
+name: Build and Deploy to Nexus
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '21'
+  MAVEN_OPTS: '-Xmx1024m'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+
+    - name: Configure Maven settings for Nexus
+      run: |
+        mkdir -p ~/.m2
+        cat > ~/.m2/settings.xml << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 
+                                      http://maven.apache.org/xsd/settings-1.0.0.xsd">
+          <servers>
+            <server>
+              <id>nexus-releases</id>
+              <username>\${env.NEXUS_USERNAME}</username>
+              <password>\${env.NEXUS_PASSWORD}</password>
+            </server>
+            <server>
+              <id>nexus-snapshots</id>
+              <username>\${env.NEXUS_USERNAME}</username>
+              <password>\${env.NEXUS_PASSWORD}</password>
+            </server>
+          </servers>
+        </settings>
+        EOF
+      env:
+        NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+        NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+
+    - name: Run tests
+      run: ./mvnw test
+
+    - name: Build JAR
+      run: ./mvnw clean package -DskipTests
+
+    - name: Upload JAR artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: spring-boot-helloworld-jar
+        path: target/*.jar
+        retention-days: 30
+
+    - name: Deploy to Nexus
+      run: ./mvnw deploy -DskipTests -Dnexus.url=${{ secrets.NEXUS_URL }}
+      env:
+        NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+        NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+
+    - name: Upload deployment summary
+      if: always()
+      run: |
+        echo "## Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
+        echo "- **Java Version**: ${{ env.JAVA_VERSION }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Maven Build**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Success'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Nexus Deploy**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Deployed'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Artifact**: spring-boot-helloworld-${GITHUB_SHA:0:8}.jar" >> $GITHUB_STEP_SUMMARY
