@@ -106,11 +106,22 @@ jobs:
           echo "Image name: $IMAGE_NAME"
           echo "Version: ${{ steps.version.outputs.version }}"
           
-          # Tag with version
+          # Clean and validate registry URL
           if [ -n "$REGISTRY" ] && [ "$REGISTRY" != "" ]; then
-            echo "Tagging with registry: $REGISTRY"
-            podman tag local-build $REGISTRY/$IMAGE_NAME:${{ steps.version.outputs.version }}
-            podman tag local-build $REGISTRY/$IMAGE_NAME:latest
+            # Remove protocol prefixes if present
+            CLEAN_REGISTRY=$(echo "$REGISTRY" | sed 's|^https\?://||' | sed 's|/$||')
+            echo "Cleaned registry: $CLEAN_REGISTRY"
+            
+            # Validate registry format
+            if [[ "$CLEAN_REGISTRY" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]] || [[ "$CLEAN_REGISTRY" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+              echo "Tagging with registry: $CLEAN_REGISTRY"
+              podman tag local-build $CLEAN_REGISTRY/$IMAGE_NAME:${{ steps.version.outputs.version }}
+              podman tag local-build $CLEAN_REGISTRY/$IMAGE_NAME:latest
+            else
+              echo "❌ Invalid registry format: $CLEAN_REGISTRY"
+              echo "Expected format: hostname:port or hostname"
+              exit 1
+            fi
           else
             echo "No registry configured, using local tags"
             podman tag local-build $IMAGE_NAME:${{ steps.version.outputs.version }}
@@ -124,10 +135,15 @@ jobs:
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         run: |
           echo "🔐 Logging into Nexus Docker registry..."
+          
+          # Clean registry URL for login
+          CLEAN_REGISTRY=$(echo "${{ env.REGISTRY }}" | sed 's|^https\?://||' | sed 's|/$||')
+          echo "Login registry: $CLEAN_REGISTRY"
+          
           echo "${{ secrets.NEXUS_PASSWORD }}" | podman login \
             --username "${{ secrets.NEXUS_USERNAME }}" \
             --password-stdin \
-            ${{ env.REGISTRY }}
+            $CLEAN_REGISTRY
 
       - name: Push container images
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
@@ -135,12 +151,16 @@ jobs:
           echo "🚀 Pushing container images..."
           
           if [ -n "${{ env.REGISTRY }}" ]; then
-            podman push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-            podman push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            # Clean registry URL for pushing
+            CLEAN_REGISTRY=$(echo "${{ env.REGISTRY }}" | sed 's|^https\?://||' | sed 's|/$||')
+            echo "Push registry: $CLEAN_REGISTRY"
+            
+            podman push $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            podman push $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:latest
           
             echo "✅ Images pushed successfully:"
-            echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
-            echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            echo "  - $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+            echo "  - $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:latest"
           else
             echo "⚠️ No registry configured, skipping push"
           fi
