@@ -95,11 +95,62 @@ jobs:
         NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
         NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
 
-    - name: Deploy to Nexus
+    - name: Extract current version
+      id: version
+      run: |
+        CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
+        echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+        # Remove -SNAPSHOT suffix and extract version parts
+        BASE_VERSION=$(echo $CURRENT_VERSION | sed 's/-SNAPSHOT//')
+        echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+
+        # Extract major, minor, patch
+        MAJOR=$(echo $BASE_VERSION | cut -d. -f1)
+        MINOR=$(echo $BASE_VERSION | cut -d. -f2)
+        PATCH=$(echo $BASE_VERSION | cut -d. -f3)
+
+        # Increment patch version
+        NEW_PATCH=$((PATCH + 1))
+        RELEASE_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+        NEXT_SNAPSHOT_VERSION="$MAJOR.$MINOR.$((NEW_PATCH + 1))-SNAPSHOT"
+
+        echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+        echo "next_snapshot_version=$NEXT_SNAPSHOT_VERSION" >> $GITHUB_OUTPUT
+
+        echo "Current version: $CURRENT_VERSION"
+        echo "Release version: $RELEASE_VERSION"
+        echo "Next snapshot version: $NEXT_SNAPSHOT_VERSION"
+
+    - name: Set release version
+      run: |
+        ./mvnw versions:set -DnewVersion=${{ steps.version.outputs.release_version }} -DgenerateBackupPoms=false
+        echo "Set version to: ${{ steps.version.outputs.release_version }}"
+
+    - name: Deploy release to Nexus
       run: ./mvnw deploy -DskipTests -Dnexus.url=${{ secrets.NEXUS_URL }}
       env:
         NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
         NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+
+    - name: Create Git tag for release
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag -a "v${{ steps.version.outputs.release_version }}" -m "Release version ${{ steps.version.outputs.release_version }}"
+        git push origin "v${{ steps.version.outputs.release_version }}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update to next snapshot version
+      run: |
+        git checkout ${{ github.ref_name }}
+        ./mvnw versions:set -DnewVersion=${{ steps.version.outputs.next_snapshot_version }} -DgenerateBackupPoms=false
+        git add pom.xml
+        git commit -m "chore: bump version to ${{ steps.version.outputs.next_snapshot_version }}"
+        git push origin ${{ github.ref_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload deployment summary
       if: always()
@@ -107,7 +158,9 @@ jobs:
         echo "## Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
         echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Released Version**: ${{ steps.version.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Next Development Version**: ${{ steps.version.outputs.next_snapshot_version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Java Version**: ${{ env.JAVA_VERSION }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Maven Build**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Success'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
         echo "- **Nexus Deploy**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Deployed'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
-        echo "- **Artifact**: spring-boot-helloworld-${GITHUB_SHA:0:8}.jar" >> $GITHUB_STEP_SUMMARY
+        echo "- **Git Tag**: v${{ steps.version.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY

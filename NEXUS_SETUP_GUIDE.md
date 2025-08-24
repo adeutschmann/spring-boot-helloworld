@@ -23,7 +23,19 @@ This guide walks you through setting up GitHub Actions to build your Spring Boot
 ### What happens:
 1. **Feature branch work**: Build and test only (no Nexus deployment)
 2. **Pull request**: Build and test only (validates the code)
-3. **Merge to main/master**: Build, test, AND deploy to Nexus
+3. **Merge to main/master**: Build, test, AND deploy to Nexus with automatic versioning
+
+### 🚀 Automatic Version Management:
+When deploying to Nexus, the workflow automatically:
+1. **Extracts current version** from pom.xml (e.g., `0.0.1-SNAPSHOT`)
+2. **Creates release version** by removing SNAPSHOT and incrementing patch (e.g., `0.0.2`)
+3. **Deploys release version** to Nexus releases repository
+4. **Creates Git tag** (e.g., `v0.0.2`) for the release
+5. **Updates pom.xml** to next snapshot version (e.g., `0.0.3-SNAPSHOT`)
+6. **Commits and pushes** the version bump back to main branch
+
+**Example flow:**
+- Start: `0.0.1-SNAPSHOT` → Deploy: `0.0.2` → Next: `0.0.3-SNAPSHOT`
 
 ## 🔐 Step 1: Set up GitHub Secrets
 
