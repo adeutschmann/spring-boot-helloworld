@@ -62,11 +62,17 @@ Click **New repository secret** for each of the following:
 - **Secret**: `https://your-nexus-instance.com` (without trailing slash)
 - Click **Add secret**
 
+#### Secret 4: NEXUS_DOCKER_REGISTRY
+- **Name**: `NEXUS_DOCKER_REGISTRY`
+- **Secret**: `your-nexus-instance.com:8082` (Docker registry URL without https://)
+- Click **Add secret**
+
 ### 1.3 Verify Secrets
 After adding all secrets, you should see:
 - ✅ NEXUS_USERNAME
 - ✅ NEXUS_PASSWORD  
 - ✅ NEXUS_URL
+- ✅ NEXUS_DOCKER_REGISTRY
 
 ## 🏗️ Step 2: Understanding the Workflow
 

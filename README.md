@@ -68,11 +68,13 @@ This project demonstrates multiple enterprise-grade features. Each feature has d
 ### 🐳 Containerization & Deployment
 - **[Podman Containerization](docs/PODMAN_CONTAINERIZATION.md)** - Security-first, rootless container builds
 - **[Multi-Stage Container Build](docs/CONTAINER_BUILD_STRATEGY.md)** - Optimized Alpine-based production containers
+- **[Container Deployment Guide](docs/CONTAINER_DEPLOYMENT_GUIDE.md)** - Comprehensive container deployment instructions
 
 ### 🏗️ CI/CD & Automation
 - **[GitHub Actions CI/CD](docs/GITHUB_ACTIONS_CICD.md)** - Automated build, test, and deployment pipelines
 - **[Intelligent Version Management](docs/VERSION_MANAGEMENT.md)** - Automatic SNAPSHOT removal and version incrementing
 - **[Nexus Integration](docs/NEXUS_INTEGRATION.md)** - Artifact and container registry management
+- **[Nexus Setup Guide](docs/NEXUS_SETUP_GUIDE.md)** - Step-by-step GitHub secrets and Nexus configuration
 
 ### 🔧 Development & Operations
 - **[Local Development Setup](docs/LOCAL_DEVELOPMENT.md)** - IDE integration and debugging
@@ -163,8 +165,8 @@ This project demonstrates enterprise-grade patterns and serves as a reference im
 
 ## 📖 Additional Resources
 
-- **[Setup Guides](NEXUS_SETUP_GUIDE.md)** - Step-by-step Nexus and GitHub configuration
-- **[Container Guide](CONTAINER_DEPLOYMENT_GUIDE.md)** - Comprehensive container deployment instructions
+- **[Nexus Setup Guide](docs/NEXUS_SETUP_GUIDE.md)** - Step-by-step Nexus and GitHub configuration
+- **[Container Deployment Guide](docs/CONTAINER_DEPLOYMENT_GUIDE.md)** - Comprehensive container deployment instructions
 - **[API Documentation](docs/API_DOCUMENTATION.md)** - Complete endpoint documentation
 
 ---

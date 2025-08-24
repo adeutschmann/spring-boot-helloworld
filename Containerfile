@@ -2,7 +2,7 @@
 FROM eclipse-temurin:21-jdk-alpine AS builder
 
 # Set metadata labels
-LABEL maintainer="Alexander Deutschmann <alexander.deutschmann@ibm.com>"
+LABEL maintainer="Alexander Deutschmann"
 LABEL description="Spring Boot HelloWorld application with RouterFunction"
 LABEL version="1.0"
 
