@@ -275,13 +275,26 @@ jobs:
           echo "📦 Deploying RELEASE to: $REPO_URL"
         fi
         
-        # Deploy using Maven deploy plugin with dynamic project coordinates
+        # Find the actual JAR file that was built
+        JAR_FILE=$(find target -name "${{ steps.version.outputs.artifact_id }}-*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -1)
+        
+        if [[ ! -f "$JAR_FILE" ]]; then
+          echo "❌ JAR file not found in target directory"
+          echo "Looking for: target/${{ steps.version.outputs.artifact_id }}-*.jar"
+          echo "Files in target directory:"
+          ls -la target/
+          exit 1
+        fi
+        
+        echo "📦 Found JAR file: $JAR_FILE"
+        
+        # Deploy using Maven deploy plugin with the actual built JAR
         ./mvnw deploy:deploy-file \
           -DgroupId=${{ steps.version.outputs.group_id }} \
           -DartifactId=${{ steps.version.outputs.artifact_id }} \
           -Dversion=${{ steps.version.outputs.release_version }} \
           -Dpackaging=jar \
-          -Dfile=target/${{ steps.version.outputs.artifact_id }}-${{ steps.version.outputs.release_version }}.jar \
+          -Dfile="$JAR_FILE" \
           -DrepositoryId=adeutschmanndev-nexus \
           -Durl=$REPO_URL \
           -DgeneratePom=false \
