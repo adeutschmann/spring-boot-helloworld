@@ -176,8 +176,8 @@ jobs:
           <servers>
             <server>
               <id>adeutschmanndev-nexus</id>
-              <username>adeutschmann</username>
-              <password>changeme</password>
+              <username>${NEXUS_USERNAME}</username>
+              <password>${NEXUS_PASSWORD}</password>
             </server>
           </servers>
         </settings>
