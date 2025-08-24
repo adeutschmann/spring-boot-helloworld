@@ -90,21 +90,28 @@ jobs:
           echo "Container image built successfully"
 
       - name: Tag images for release
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
           echo "🏷️ Tagging images for release..."
+          echo "Registry: $REGISTRY"
+          echo "Image name: $IMAGE_NAME"
+          echo "Version: ${{ steps.version.outputs.version }}"
           
-          # Tag with version (only if REGISTRY is set)
-          if [ -n "${{ env.REGISTRY }}" ]; then
-            podman tag local-build ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-            podman tag local-build ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          # Tag with version
+          if [ -n "$REGISTRY" ] && [ "$REGISTRY" != "" ]; then
+            echo "Tagging with registry: $REGISTRY"
+            podman tag local-build $REGISTRY/$IMAGE_NAME:${{ steps.version.outputs.version }}
+            podman tag local-build $REGISTRY/$IMAGE_NAME:latest
           else
-            # If no registry, use local tags
-            podman tag local-build ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-            podman tag local-build ${{ env.IMAGE_NAME }}:latest
+            echo "No registry configured, using local tags"
+            podman tag local-build $IMAGE_NAME:${{ steps.version.outputs.version }}
+            podman tag local-build $IMAGE_NAME:latest
           fi
           
           echo "Tagged images:"
-          podman images | grep ${{ env.IMAGE_NAME }}
+          podman images | grep $IMAGE_NAME
 
       - name: Login to Container Registry
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
