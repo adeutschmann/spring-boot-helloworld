@@ -12,8 +12,6 @@ env:
   MAVEN_OPTS: '-Xmx1024m'
   REGISTRY: ghcr.io
   IMAGE_NAME: spring-boot-helloworld
-  NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-  NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
 
 jobs:
   build:
@@ -162,42 +160,31 @@ jobs:
     - name: Configure Maven settings for Nexus
       run: |
         mkdir -p ~/.m2
-        
-        # Escape special XML characters in credentials
-        NEXUS_USERNAME_ESCAPED=$(echo "$NEXUS_USERNAME" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&apos;/g')
-        NEXUS_PASSWORD_ESCAPED=$(echo "$NEXUS_PASSWORD" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&apos;/g')
-        
-        cat > ~/.m2/settings.xml << 'EOF'
-  <?xml version="1.0" encoding="UTF-8"?>
-  <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
-  http://maven.apache.org/xsd/settings-1.0.0.xsd">
-  <servers>
-  <server>
-  <id>nexus-releases</id>
-  <username>NEXUS_USERNAME_PLACEHOLDER</username>
-  <password>NEXUS_PASSWORD_PLACEHOLDER</password>
-  </server>
-  <server>
-  <id>nexus-snapshots</id>
-  <username>NEXUS_USERNAME_PLACEHOLDER</username>
-  <password>NEXUS_PASSWORD_PLACEHOLDER</password>
-  </server>
-  </servers>
-  </settings>
-  EOF
-  
-  # Replace placeholders with escaped values
-  sed -i "s/NEXUS_USERNAME_PLACEHOLDER/$NEXUS_USERNAME_ESCAPED/g" ~/.m2/settings.xml
-  sed -i "s/NEXUS_PASSWORD_PLACEHOLDER/$NEXUS_PASSWORD_ESCAPED/g" ~/.m2/settings.xml
-  
-  echo "✅ Maven settings.xml configured successfully"
-  echo "Settings file contents (with masked credentials):"
-  sed 's/<password>.*<\/password>/<password>***<\/password>/g' ~/.m2/settings.xml
+        cat > ~/.m2/settings.xml << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 
+                                      http://maven.apache.org/xsd/settings-1.0.0.xsd">
+          <servers>
+            <server>
+              <id>nexus-releases</id>
+              <username>${NEXUS_USERNAME}</username>
+              <password>${NEXUS_PASSWORD}</password>
+            </server>
+            <server>
+              <id>nexus-snapshots</id>
+              <username>${NEXUS_USERNAME}</username>
+              <password>${NEXUS_PASSWORD}</password>
+            </server>
+          </servers>
+        </settings>
+        EOF
+      env:
+        NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+        NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
 
-
-- name: Extract current version
+    - name: Extract current version
       id: version
       run: |
         # Make Maven wrapper executable
@@ -213,17 +200,6 @@ jobs:
           echo "⚠️ Maven wrapper failed, trying alternative methods..."
         
           # Method 2: Parse pom.xml directly
-          CURRENT_VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
-          echo "✅ Version extracted from pom.xml: $CURRENT_VERSION"
-        fi
-        
-        # Validate version format
-        if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT)?$ ]]; then
-          echo "❌ Invalid version format: $CURRENT_VERSION"
-          echo "Setting default version: 0.0.1-SNAPSHOT"
-          CURRENT_VERSION="0.0.1-SNAPSHOT"
-        fi
-        
         echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
         # Remove -SNAPSHOT suffix and extract version parts
