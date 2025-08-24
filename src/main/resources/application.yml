@@ -1,1 +1,3 @@
-spring.application.name=helloworld
+spring:
+  application:
+    name: "helloworld"
