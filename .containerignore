@@ -1,0 +1,25 @@
+# Git files
+.git
+.gitignore
+
+# IDE files
+.idea
+*.iml
+*.iws
+
+# Maven
+target
+
+# Documentation
+README.md
+HELP.md
+
+# CI/CD
+.github
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
