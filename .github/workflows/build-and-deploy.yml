@@ -112,7 +112,7 @@ jobs:
           REGISTRY: ${{ env.REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          echo "🏷����� Tagging images for release..."
+          echo "🏷️ Tagging images for release..."
           echo "Registry: $REGISTRY"
           echo "Image name: $IMAGE_NAME"
           echo "Version: ${{ steps.version.outputs.version }}"
@@ -383,7 +383,7 @@ jobs:
         echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Released Version**: ${{ steps.version.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Next Development Version**: ${{ steps.version.outputs.next_snapshot_version }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Java Version**: ${{ env.JAVA_VERSION }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Java Version**: $JAVA_VERSION" >> $GITHUB_STEP_SUMMARY
         echo "- **Maven Build**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Success'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
         echo "- **Nexus Deploy**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Deployed'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
         echo "- **Git Tag**: v${{ steps.version.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY

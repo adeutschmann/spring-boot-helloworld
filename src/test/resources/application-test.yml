@@ -1,0 +1,6 @@
+server:
+  port: 0  # Use random port for tests
+logging:
+  level:
+    ch.adeutschmanndev.helloworld: DEBUG
+    org.springframework.web: DEBUG

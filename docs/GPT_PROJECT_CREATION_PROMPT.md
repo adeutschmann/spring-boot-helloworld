@@ -214,15 +214,15 @@ RUN addgroup -g 1001 -S appgroup && \
 WORKDIR /app
 
 # Copy build files with proper ownership
-COPY --chown=appuser:appgroup mvnw pom.xml ./
-COPY --chown=appuser:appgroup .mvn .mvn
+COPY --chown=appuser:appgroup ../mvnw pom.xml ./
+COPY --chown=appuser:appgroup ../.mvn .mvn
 
 # Install dependencies (cached layer)
 USER appuser
 RUN ./mvnw dependency:go-offline -B
 
 # Copy source and build
-COPY --chown=appuser:appgroup src src
+COPY --chown=appuser:appgroup ../src src
 RUN ./mvnw clean package -DskipTests -B
 
 # Runtime stage - Use Eclipse Temurin JRE 21 Alpine for smaller footprint
