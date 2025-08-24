@@ -74,12 +74,16 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          # Extract version from pom.xml
-          VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
-          # Remove -SNAPSHOT for container tags
-          CLEAN_VERSION=$(echo $VERSION | sed 's/-SNAPSHOT//')
+          # Extract project version specifically (not parent version)
+          VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout 2>/dev/null || \
+                   grep -A 10 '<artifactId>helloworld</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
+          echo "Extracted project version: $VERSION"
+          
+          # For container tags, we can keep the full version including SNAPSHOT
+          # or remove it depending on your preference
+          CLEAN_VERSION="$VERSION"
           echo "version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $CLEAN_VERSION"
+          echo "Container version: $CLEAN_VERSION"
 
       - name: Set up Podman
         run: |
@@ -101,7 +105,7 @@ jobs:
           REGISTRY: ${{ env.REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          echo "🏷️ Tagging images for release..."
+          echo "🏷����� Tagging images for release..."
           echo "Registry: $REGISTRY"
           echo "Image name: $IMAGE_NAME"
           echo "Version: ${{ steps.version.outputs.version }}"
@@ -239,10 +243,10 @@ jobs:
         else
           echo "⚠️ Maven wrapper failed, trying alternative methods..."
         
-          # Method 2: Parse pom.xml directly
-          CURRENT_VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
-          GROUP_ID=$(grep -m1 '<groupId>' pom.xml | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
-          ARTIFACT_ID=$(grep -m1 '<artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
+          # Method 2: Parse pom.xml directly - extract project version specifically
+          CURRENT_VERSION=$(grep -A 10 '<artifactId>helloworld</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
+          GROUP_ID=$(grep -A 5 '<artifactId>helloworld</artifactId>' pom.xml | grep -B 5 '<version>' | grep '<groupId>' | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
+          ARTIFACT_ID=$(grep '<artifactId>helloworld</artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
           echo "✅ Project info extracted from pom.xml:"
           echo "  GroupId: $GROUP_ID"
           echo "  ArtifactId: $ARTIFACT_ID"
