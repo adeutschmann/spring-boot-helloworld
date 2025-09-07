@@ -472,7 +472,7 @@ jobs:
         env:
           TAG: ${{ needs.build-container.outputs.image-version || needs.build-container.outputs.tag || steps.version.outputs.release_version }}
         run: |
-          cd config-repo/environments/dev
+          cd config-repo/environments/dev/hello-world
           yq -i '
             (.images[] | select(.name == "registry-nexus.apps.ocp4.adeutschmann.dev/spring-boot-helloworld")).newTag = env(TAG)
           ' kustomization.yaml
@@ -482,6 +482,6 @@ jobs:
           cd config-repo
           git config user.name "ci-bot"
           git config user.email "ci@example.com"
-          git add environments/dev/kustomization.yaml
+          git add environments/dev/hello-world/kustomization.yaml
           git commit -m "Deploy dev: spring-boot-helloworld:${{ env.TAG }}"
           git push
